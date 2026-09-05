@@ -86,6 +86,9 @@ export const inject = []
 export function apply(ctx) {
   const result = forkCompatibility(probeKnownEventTypes(), probeRuntimeRegistry())
   mountSessionsStore(ctx)
+  console.info('[dsh-better-harness] service availability — settings:', ctx.get('settings') !== undefined,
+    '| webServer:', ctx.get('webServer') !== undefined,
+    '| sessionPersistence:', ctx.get('sessionPersistence') !== undefined)
   const line = `[dsh-better-harness] ${result.verdict} ${result.detail}`
   if (result.ok) console.info(line)
   else {
