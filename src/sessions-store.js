@@ -1,70 +1,62 @@
 /**
  * Host sessions store: the persistence lane for user-authored session
- * metadata. One settings namespace (`better-harness.sessions`) holds the
- * document; every mutation routes through the pure domain model
- * (session-meta.js) so host-side validation and client-side UI share one
- * rulebook. Routes expose read + act to the browser half.
+ * metadata. One JSON document under the DSH home
+ * (`$DSH_HOME/better-harness/sessions.json`, default `~/.dsh/...`); every
+ * mutation routes through the pure domain model (session-meta.js) so
+ * host-side validation and client-side UI share one rulebook. Atomic
+ * tmp+rename writes keep the file whole under concurrent routes. Routes
+ * expose read + act + list to the browser half.
+ *
+ * (The settings namespace lane was tried first and is injectively invisible
+ * to bundle-mounted user plugins in this cordis build — see the repo docs.)
  */
 
-import { createRequire } from 'node:module'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { emptySessionMeta, normalizeSessionMeta, applySessionMetaAction } from './session-meta.js'
 
-const require = createRequire(import.meta.url)
-
-export const SESSIONS_NS = 'better-harness.sessions'
 export const API_PREFIX = '/api/better-harness/sessions'
 
-/**
- * Build the namespace schema from the resolved schemastery.
- * @param {object} [z] - schemastery module; resolved from the installed tree when omitted.
- */
-function sessionsSchema(z) {
-  const schemaLib = z ?? require('@deepseek-ai/schemastery')
-  // Shape follows the domain model exactly: favorites/pinned id lists and a
-  // name -> member-ids record. `groups` stays z.any() at the schema level
-  // because the register-time validate (normalizeSessionMeta) owns its shape.
-  return schemaLib.object({
-    favorites: schemaLib.array(schemaLib.string()).default([]),
-    pinned: schemaLib.array(schemaLib.string()).default([]),
-    groups: schemaLib.any(),
-  })
+/** Document path: the plugin's own lane under the DSH home. */
+export function sessionsStorePath() {
+  const home = process.env.DSH_HOME ?? join(homedir(), '.dsh')
+  return join(home, 'better-harness', 'sessions.json')
 }
 
 /**
- * Mount the namespace and routes on a host context.
+ * Mount the store and routes on a host context.
  * @param {import('@deepseek-ai/cordis').Context} ctx - host plugin context.
- * @returns {{ read: () => object, act: (action: object) => object }} the store surface (also routed).
+ * @param {{ path?: string }} [options] - store path override (tests).
+ * @returns {{ read: () => Promise<object>, act: (action: object) => Promise<object> }}
  */
-export function mountSessionsStore(ctx, { z } = {}) {
-  let scope = null
-  let settingsService = null
+export function mountSessionsStore(ctx, options = {}) {
+  const path = options.path ?? sessionsStorePath()
+  let cache = null
 
-  ctx.inject(['settings'], (settingsCtx) => {
+  /** Read the document, normalizing whatever is stored. */
+  const read = async () => {
+    if (cache !== null) return cache
+    let raw
     try {
-      settingsService = settingsCtx.settings
-      const schema = sessionsSchema(z)
-      scope = settingsService.register(SESSIONS_NS, schema, {
-        base: emptySessionMeta(),
-        validate: (value) => { normalizeSessionMeta(value) },
-      })
-      console.info('[dsh-better-harness] sessions namespace registered; scope:', scope !== null)
+      raw = await readFile(path, 'utf8')
     } catch (error) {
-      console.error('[dsh-better-harness] settings mount FAILED:', error)
+      if ((error)?.code === 'ENOENT') raw = undefined
+      else throw error
     }
-  })
+    cache = raw === undefined ? emptySessionMeta() : normalizeSessionMeta(JSON.parse(raw))
+    return cache
+  }
 
-
-  /** Current normalized document. */
-  const read = () => (scope ? normalizeSessionMeta(scope.get()) : emptySessionMeta())
-
-  /** Apply one domain action and persist the next document whole. */
-  const act = (action) => {
-    if (scope === null) throw new Error('dsh-better-harness: settings service not yet mounted')
-    const next = applySessionMetaAction(read(), action)
-    const write = typeof settingsService.replace === 'function'
-      ? settingsService.replace(SESSIONS_NS, next)
-      : settingsService.update(SESSIONS_NS, next)
-    return write instanceof Promise ? write.then(() => next) : next
+  /** Apply one domain action and persist the next document atomically. */
+  const act = async (action) => {
+    const next = applySessionMetaAction(await read(), action)
+    const tmp = `${path}.${process.pid}.tmp`
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(tmp, `${JSON.stringify(next, null, 2)}\n`, 'utf8')
+    await rename(tmp, path)
+    cache = next
+    return next
   }
 
   ctx.inject(['sessionPersistence'], (persistenceCtx) => {
@@ -85,8 +77,8 @@ export function mountSessionsStore(ctx, { z } = {}) {
         handler: (req, res) => {
           if (!isLoopback(req)) { json(res, 403, { ok: false, error: 'loopback-only' }); return }
           if (req.method !== 'GET') { json(res, 405, { ok: false, error: 'method-not-allowed' }); return }
-          listSessions()
-            .then((sessions) => json(res, 200, { ok: true, state: read(), sessions }))
+          Promise.all([read(), listSessions()])
+            .then(([state, sessions]) => json(res, 200, { ok: true, state, sessions }))
             .catch((error) => json(res, 500, { ok: false, error: String(error.message ?? error) }))
         },
       })
@@ -97,10 +89,13 @@ export function mountSessionsStore(ctx, { z } = {}) {
     webCtx.webServer.register({
       kind: 'exact',
       path: API_PREFIX,
-      // eslint-disable-next-line no-unused-vars -- route runner may await the handler
       handler: async (req, res) => {
         if (!isLoopback(req)) { json(res, 403, { ok: false, error: 'loopback-only' }); return }
-        if (req.method === 'GET') { json(res, 200, { ok: true, state: read() }); return }
+        if (req.method === 'GET') {
+          read().then((state) => json(res, 200, { ok: true, state }))
+            .catch((error) => json(res, 500, { ok: false, error: String(error.message ?? error) }))
+          return
+        }
         if (req.method !== 'POST') { json(res, 405, { ok: false, error: 'method-not-allowed' }); return }
         if (!(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
           json(res, 415, { ok: false, error: 'json-required' }); return
@@ -111,8 +106,7 @@ export function mountSessionsStore(ctx, { z } = {}) {
           return
         }
         try {
-          const action = body?.action
-          const state = await act(action)
+          const state = await act(body?.action)
           json(res, 200, { ok: true, state })
         } catch (error) {
           json(res, 400, { ok: false, error: String(error.message ?? error) })
