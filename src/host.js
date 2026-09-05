@@ -14,6 +14,7 @@
  */
 
 import { createRequire } from 'node:module'
+import { mountSessionsStore } from './sessions-store.js'
 
 const require = createRequire(import.meta.url)
 
@@ -84,6 +85,7 @@ export const inject = []
  */
 export function apply(ctx) {
   const result = forkCompatibility(probeKnownEventTypes(), probeRuntimeRegistry())
+  mountSessionsStore(ctx)
   const line = `[dsh-better-harness] ${result.verdict} ${result.detail}`
   if (result.ok) console.info(line)
   else {
