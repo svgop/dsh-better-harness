@@ -1,6 +1,6 @@
 {
   "name": "dsh-better-harness",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Fork-local capabilities for the savageops deepseek-harness fork: a boot-time compatibility guard that verifies the running harness carries the fork's session read-path admissions, plus the landing zone for fork features that compose through public seams (slots, tools, session-event registration) instead of in-tree patches.",
   "keywords": [
     "deepseek-harness",
@@ -44,6 +44,6 @@
     }
   },
   "scripts": {
-    "test": "node --test src/host.test.js"
+    "test": "node --test src/host.test.js src/session-meta.test.js"
   }
 }
