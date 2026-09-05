@@ -14,7 +14,13 @@ window.__ModuleLoader__.load({
 		let react = require("react");
 		let jsx = require("react/jsx-runtime");
 		const { useEffect, useMemo, useRef, useState } = react;
-		const h = jsx.jsx;
+		// jsx(type, props, key) takes children INSIDE props; adapt the
+		// h(type, props, ...children) authoring form onto that contract.
+		const h = (type, props, ...children) => {
+			const base = props ?? {}
+			if (children.length === 0) return jsx.jsx(type, base)
+			return jsx.jsx(type, { ...base, children: children.length === 1 ? children[0] : children })
+		};
 
 		const NS = "better-harness";
 		const API = "/api/better-harness/sessions";
