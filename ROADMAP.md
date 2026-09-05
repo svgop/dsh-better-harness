@@ -23,15 +23,22 @@ extension surface (audited 2026-09-05 against dsh 0.1.3-alpha.1 source).
 fork. Upstream's browser stays mounted as the fallback; the plugin's browser
 must reach feature parity before it may claim the seat.
 
-**Persistence: the host settings lane** (`better-harness.sessions` namespace,
-declared by this package's host half): favorites, pins, and groups live in
-the same revisioned, host-durable settings document as every other user
-preference. No private side-store.
+**Persistence: the plugin's own DSH-home lane**
+(`$DSH_HOME/better-harness/sessions.json`, atomic writes, one JSON document
+through the domain model). The settings namespace lane was the first choice
+but is injectively invisible to bundle-mounted user plugins in this cordis
+build — `ctx.get('settings')` resolves while `ctx.inject(['settings'])`
+never fires (statically declared or not), so no user plugin can register a
+namespace today. If that boundary is fixed upstream, the store can migrate
+documents into the settings lane unchanged; the domain model is identical.
 
 ### Phase 1 — foundation (this release, v0.2.0)
 - Pure domain model for session metadata: favorites, pins, groups
   (create/rename/delete, membership), validation, and the sort/filter query
   combinators the UI will consume. Fully unit-tested (`src/session-meta.js`).
+- Host store + routes over the file lane: GET state, POST one domain
+  action, GET /list joining persistence headers. Loopback-fenced,
+  live-verified end to end. Unit-tested (`src/sessions-store.js`).
 - Roadmap + seam documentation (this file).
 
 ### Phase 2 — panel UI
