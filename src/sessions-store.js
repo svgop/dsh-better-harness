@@ -42,11 +42,17 @@ export function mountSessionsStore(ctx, { z } = {}) {
   let settingsService = null
 
   ctx.inject(['settings'], (settingsCtx) => {
-    settingsService = settingsCtx.settings
-    scope = settingsService.register(SESSIONS_NS, sessionsSchema(z), {
-      base: emptySessionMeta(),
-      validate: (value) => { normalizeSessionMeta(value) },
-    })
+    try {
+      settingsService = settingsCtx.settings
+      const schema = sessionsSchema(z)
+      scope = settingsService.register(SESSIONS_NS, schema, {
+        base: emptySessionMeta(),
+        validate: (value) => { normalizeSessionMeta(value) },
+      })
+      console.info('[dsh-better-harness] sessions namespace registered; scope:', scope !== null)
+    } catch (error) {
+      console.error('[dsh-better-harness] settings mount FAILED:', error)
+    }
   })
 
   /** Current normalized document. */
