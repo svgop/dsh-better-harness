@@ -84,9 +84,11 @@ export const inject = []
  */
 export function apply(ctx) {
   const result = forkCompatibility(probeKnownEventTypes(), probeRuntimeRegistry())
-  ctx('info', `[dsh-better-harness] ${result.verdict} ${result.detail}`)
-  if (!result.ok) {
-    ctx('warn', '[dsh-better-harness] this deployment is NOT the savageops fork build; '
+  const line = `[dsh-better-harness] ${result.verdict} ${result.detail}`
+  if (result.ok) console.info(line)
+  else {
+    console.warn(line)
+    console.warn('[dsh-better-harness] this deployment is NOT the savageops fork build; '
       + 'old sessions carrying fork plugin events will fail with unknown-event-type refusals')
   }
 }
