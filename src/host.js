@@ -1,5 +1,4 @@
 /**
-console.info('[dsh-better-harness BUILD-STAMP] host canary-7f3d')
  * dsh-better-harness — fork-local capabilities for the savageops harness fork.
  *
  * v0.1.0 ships the boot-time fork compatibility guard: the fork's harness
@@ -77,7 +76,7 @@ export function forkCompatibility(known, registry) {
   return { ok, verdict, detail }
 }
 
-export const inject = []
+export const inject = ['settings', 'sessionPersistence', 'webServer']
 
 /**
  * Mount the fork compatibility guard: report read-path admission state once at boot.

@@ -1,5 +1,4 @@
 /**
-console.info('[dsh-better-harness BUILD-STAMP] store canary-7f3d')
  * Host sessions store: the persistence lane for user-authored session
  * metadata. One settings namespace (`better-harness.sessions`) holds the
  * document; every mutation routes through the pure domain model
@@ -40,7 +39,7 @@ export function mountSessionsStore(ctx, { z } = {}) {
   let scope = null
   let settingsService = null
 
-  const armSettings = () => ctx.inject(['settings'], (settingsCtx) => {
+  ctx.inject(['settings'], (settingsCtx) => {
     try {
       settingsService = settingsCtx.settings
       const schema = sessionsSchema(z)
@@ -53,15 +52,7 @@ export function mountSessionsStore(ctx, { z } = {}) {
       console.error('[dsh-better-harness] settings mount FAILED:', error)
     }
   })
-  armSettings()
 
-  // Deferred-availability probe: if the settings service exists but the
-  // injection never fired in our fiber, re-arm once from the root context.
-  setTimeout(() => {
-    const available = ctx.get('settings') !== undefined
-    console.info('[dsh-better-harness] +8s settings available:', available, '| registered:', scope !== null)
-    if (available && scope === null) armSettings()
-  }, 8_000).unref?.()
 
   /** Current normalized document. */
   const read = () => (scope ? normalizeSessionMeta(scope.get()) : emptySessionMeta())
