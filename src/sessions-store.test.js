@@ -46,7 +46,7 @@ test('mounts the namespace, reads the base, and applies actions through the lane
   const ctx = fakeCtx()
   const settings = fakeSettings()
   const store = mountSessionsStore(ctx, { z: stubZ() })
-  flush(ctx, { settings, webServer: { register: () => {} } })
+  flush(ctx, { settings, sessionPersistence: { list: async () => [] }, webServer: { register: () => {} } })
 
   assert.deepEqual(store.read().favorites, [])
   const next = store.act({ type: 'toggle-favorite', sessionId: 'session-1' })
@@ -59,7 +59,7 @@ test('acts are validated by the domain model and refuse loudly', () => {
   const ctx = fakeCtx()
   const settings = fakeSettings()
   const store = mountSessionsStore(ctx, { z: stubZ() })
-  flush(ctx, { settings, webServer: { register: () => {} } })
+  flush(ctx, { settings, sessionPersistence: { list: async () => [] }, webServer: { register: () => {} } })
   assert.throws(() => store.act({ type: 'toggle-pin', sessionId: 'never-favorited' }), /requires a favorite/)
 })
 
@@ -75,14 +75,26 @@ test('routes: GET returns state, POST applies an action, non-loopback is fenced'
   const routes = []
   flush(ctx, {
     settings,
+    sessionPersistence: { list: async () => [{ header: { id: 'session-3', createdAt: 5 }, eventCount: 2 }] },
     webServer: { register: (route) => routes.push(route) },
   })
-  assert.equal(routes.length, 1)
+  assert.equal(routes.length, 2)
+  assert.deepEqual(routes.map((route) => route.path).sort(), ['/api/better-harness/sessions', '/api/better-harness/sessions/list'])
 
   const okRes = { headers: {}, body: null, writeHead(status, headers) { this.status = status; this.headers = headers }, end(b) { this.body = JSON.parse(b) } }
   routes[0].handler({ method: 'GET', socket: { remoteAddress: '127.0.0.1' } }, okRes)
   assert.equal(okRes.status, 200)
   assert.equal(okRes.body.ok, true)
+
+  const listRes = { headers: {}, writeHead(status) { this.status = status }, end(b) { this.body = JSON.parse(b) } }
+  await new Promise((resolve) => {
+    listRes.end = (b) => { listRes.body = JSON.parse(b); resolve() }
+    routes.find((route) => route.path.endsWith('/list')).handler(
+      { method: 'GET', socket: { remoteAddress: '127.0.0.1' } }, listRes)
+  })
+  assert.equal(listRes.status, 200)
+  // JSON.stringify drops undefined members; the wire shape omits absent header fields.
+  assert.deepEqual(listRes.body.sessions, [{ id: 'session-3', createdAt: 5, eventCount: 2 }])
 
   const fencedRes = { writeHead(status) { this.status = status }, end(b) { this.body = JSON.parse(b) } }
   routes[0].handler({ method: 'GET', socket: { remoteAddress: '192.168.1.5' } }, fencedRes)
