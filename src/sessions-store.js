@@ -1,4 +1,5 @@
 /**
+console.info('[dsh-better-harness BUILD-STAMP] store canary-7f3d')
  * Host sessions store: the persistence lane for user-authored session
  * metadata. One settings namespace (`better-harness.sessions`) holds the
  * document; every mutation routes through the pure domain model

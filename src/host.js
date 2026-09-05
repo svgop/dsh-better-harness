@@ -1,4 +1,5 @@
 /**
+console.info('[dsh-better-harness BUILD-STAMP] host canary-7f3d')
  * dsh-better-harness — fork-local capabilities for the savageops harness fork.
  *
  * v0.1.0 ships the boot-time fork compatibility guard: the fork's harness
