@@ -1,0 +1,10 @@
+# dsh-better-harness bundle patch: inserts the fork-capabilities plugin row.
+#
+# Node half (exports "."): the boot-time fork compatibility guard plus the
+# public home for fork-local capabilities that compose through public seams.
+#
+# Deactivate from the profile's own cordis.patch.yml (later layer wins) or the
+# plugin-manager toggle:  { id: better-harness, disabled: true }
+- insert:
+    - id: better-harness
+      name: dsh-better-harness

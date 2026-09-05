@@ -1,0 +1,49 @@
+{
+  "name": "dsh-better-harness",
+  "version": "0.1.0",
+  "description": "Fork-local capabilities for the savageops deepseek-harness fork: a boot-time compatibility guard that verifies the running harness carries the fork's session read-path admissions, plus the landing zone for fork features that compose through public seams (slots, tools, session-event registration) instead of in-tree patches.",
+  "keywords": [
+    "deepseek-harness",
+    "deepseek-harness-plugin",
+    "dsh-plugin",
+    "dsh"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/svgop/dsh-better-harness.git"
+  },
+  "homepage": "https://github.com/svgop/dsh-better-harness#readme",
+  "bugs": {
+    "url": "https://github.com/svgop/dsh-better-harness/issues"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "main": "src/host.js",
+  "exports": {
+    ".": "./src/host.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "engines": {
+      "dsh": ">=0.1.2"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node --test src/host.test.js"
+  }
+}
