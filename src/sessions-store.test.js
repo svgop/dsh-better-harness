@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { Readable } from 'node:stream'
 import { mountSessionsStore, SESSIONS_NS } from './sessions-store.js'
 
 /** Schemastery stand-in: every access/apply is a chainable stub, so any
@@ -101,12 +102,13 @@ test('routes: GET returns state, POST applies an action, non-loopback is fenced'
   assert.equal(fencedRes.status, 403)
 
   const postRes = { writeHead(status) { this.status = status }, end(b) { this.body = JSON.parse(b) } }
-  const req = {
-    method: 'POST',
-    socket: { remoteAddress: '127.0.0.1' },
-    on(event, cb) { if (event === 'data') cb(JSON.stringify({ action: { type: 'toggle-favorite', sessionId: 'session-2' } })) ; if (event === 'end') setImmediate(cb) },
-  }
-  await new Promise((resolve) => { postRes.end = (b) => { postRes.body = JSON.parse(b); resolve() }; routes[0].handler(req, postRes) })
+  const payload = JSON.stringify({ action: { type: 'toggle-favorite', sessionId: 'session-2' } })
+  const req = Readable.from([payload])
+  req.method = 'POST'
+  req.socket = { remoteAddress: '127.0.0.1' }
+  req.headers = { 'content-type': 'application/json' }
+  const actionRoute = routes.find((route) => route.path === '/api/better-harness/sessions')
+  await actionRoute.handler(req, postRes)
   assert.equal(postRes.status, 200)
   assert.deepEqual(postRes.body.state.favorites, ['session-2'])
   assert.deepEqual(settings.stored.favorites, ['session-2'])

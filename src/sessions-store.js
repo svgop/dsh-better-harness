@@ -92,30 +92,45 @@ export function mountSessionsStore(ctx, { z } = {}) {
     webCtx.webServer.register({
       kind: 'exact',
       path: API_PREFIX,
-      handler: (req, res) => {
+      // eslint-disable-next-line no-unused-vars -- route runner may await the handler
+      handler: async (req, res) => {
         if (!isLoopback(req)) { json(res, 403, { ok: false, error: 'loopback-only' }); return }
         if (req.method === 'GET') { json(res, 200, { ok: true, state: read() }); return }
         if (req.method !== 'POST') { json(res, 405, { ok: false, error: 'method-not-allowed' }); return }
-        let body = ''
-        req.on('data', (chunk) => {
-          body += chunk
-          if (body.length > 64 * 1024) req.destroy()
-        })
-        req.on('end', () => {
-          try {
-            const { action } = JSON.parse(body)
-            Promise.resolve(act(action))
-              .then((state) => json(res, 200, { ok: true, state }))
-              .catch((error) => json(res, 400, { ok: false, error: String(error.message ?? error) }))
-          } catch (error) {
-            json(res, 400, { ok: false, error: 'invalid-json' })
-          }
-        })
+        if (!(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
+          json(res, 415, { ok: false, error: 'json-required' }); return
+        }
+        let body
+        try { body = await readJsonBody(req) } catch (error) {
+          json(res, error?.message === 'body-too-large' ? 413 : 400, { ok: false, error: error?.message ?? 'bad-request' })
+          return
+        }
+        try {
+          const action = body?.action
+          const state = await act(action)
+          json(res, 200, { ok: true, state })
+        } catch (error) {
+          json(res, 400, { ok: false, error: String(error.message ?? error) })
+        }
       },
     })
   })
 
   return { read, act }
+}
+
+/** Read a bounded JSON request body (rich-tracking pattern). */
+async function readJsonBody(req, limit = 64 * 1024) {
+  const chunks = []
+  let size = 0
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    size += buffer.length
+    if (size > limit) throw new Error('body-too-large')
+    chunks.push(buffer)
+  }
+  const raw = Buffer.concat(chunks).toString('utf8')
+  return raw === '' ? undefined : JSON.parse(raw)
 }
 
 /** Shared JSON response writer. */
