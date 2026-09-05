@@ -62,11 +62,33 @@ export function mountSessionsStore(ctx, { z } = {}) {
     return write instanceof Promise ? write.then(() => next) : next
   }
 
-  ctx.inject(['webServer'], (webCtx) => {
-    const json = (res, status, body) => {
-      res.writeHead(status, { 'content-type': 'application/json' })
-      res.end(JSON.stringify(body))
+  ctx.inject(['sessionPersistence'], (persistenceCtx) => {
+    const listSessions = async () => {
+      const snapshots = await persistenceCtx.sessionPersistence.list()
+      return snapshots.map((snapshot) => ({
+        id: String(snapshot.header.id),
+        cwd: typeof snapshot.header.cwd === 'string' ? snapshot.header.cwd : undefined,
+        createdAt: snapshot.header.createdAt,
+        eventCount: snapshot.eventCount,
+        sizeBytes: snapshot.sizeBytes,
+      }))
     }
+    ctx.inject(['webServer'], (webCtx) => {
+      webCtx.webServer.register({
+        kind: 'exact',
+        path: `${API_PREFIX}/list`,
+        handler: (req, res) => {
+          if (!isLoopback(req)) { json(res, 403, { ok: false, error: 'loopback-only' }); return }
+          if (req.method !== 'GET') { json(res, 405, { ok: false, error: 'method-not-allowed' }); return }
+          listSessions()
+            .then((sessions) => json(res, 200, { ok: true, state: read(), sessions }))
+            .catch((error) => json(res, 500, { ok: false, error: String(error.message ?? error) }))
+        },
+      })
+    })
+  })
+
+  ctx.inject(['webServer'], (webCtx) => {
     webCtx.webServer.register({
       kind: 'exact',
       path: API_PREFIX,
@@ -94,6 +116,12 @@ export function mountSessionsStore(ctx, { z } = {}) {
   })
 
   return { read, act }
+}
+
+/** Shared JSON response writer. */
+function json(res, status, body) {
+  res.writeHead(status, { 'content-type': 'application/json' })
+  res.end(JSON.stringify(body))
 }
 
 /** Loopback fence: the web route serves this machine's browser only. */
