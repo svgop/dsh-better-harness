@@ -7,7 +7,7 @@
  */
 
 import { createRequire } from 'node:module'
-import { emptySessionMeta, normalizeSessionMeta, applySessionMetaAction, LIMITS } from './session-meta.js'
+import { emptySessionMeta, normalizeSessionMeta, applySessionMetaAction } from './session-meta.js'
 
 const require = createRequire(import.meta.url)
 
@@ -20,15 +20,13 @@ export const API_PREFIX = '/api/better-harness/sessions'
  */
 function sessionsSchema(z) {
   const schemaLib = z ?? require('@deepseek-ai/schemastery')
+  // Shape follows the domain model exactly: favorites/pinned id lists and a
+  // name -> member-ids record. `groups` stays z.any() at the schema level
+  // because the register-time validate (normalizeSessionMeta) owns its shape.
   return schemaLib.object({
-    favorites: z.array(z.string()).default([]),
-    pinned: z.array(z.string()).default([]),
-    groups: z.array(z.object({
-      id: z.string().min(1),
-      name: z.string().min(1).max(LIMITS.maxNameLength),
-      order: z.number().default(0),
-    })).default([]),
-    assignments: z.object({}).default({}),
+    favorites: schemaLib.array(schemaLib.string()).default([]),
+    pinned: schemaLib.array(schemaLib.string()).default([]),
+    groups: schemaLib.any(),
   })
 }
 
